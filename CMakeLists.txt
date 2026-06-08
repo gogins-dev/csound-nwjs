@@ -24,9 +24,10 @@ message(STATUS "CMAKE_HOST_SYSTEM_NAME: ${CMAKE_HOST_SYSTEM_NAME}")
 # we try to download csound-ac head and replace that copy when the download
 # succeeds.
 #
-# CsoundAC composition (ChordSpace, scores, etc.) is wasm-only (csound-wasm).
-# csound.node uses only header-only csound-ac helpers under vendor/csound-ac/;
-# those headers are vendored in git and refreshed from csound-ac master on every
+# CsoundAC composition (ChordSpace, scores, etc.) is wasm-only (csound-wasm) on
+# macOS, Linux, and Windows. csound.node never links libCsoundAC on any platform;
+# it uses only header-only csound-ac helpers under vendor/csound-ac/. Those
+# headers are vendored in git and refreshed from csound-ac master on every
 # configure and before each build.
 # -----------------------------------------------------------------------------
 set(_find_csound_home_first_cmake "${CSOUND_NWJS_SOURCE_DIR}/cmake/FindCsoundHomeFirst.cmake")

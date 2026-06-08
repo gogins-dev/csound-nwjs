@@ -33,12 +33,13 @@
                     ],
                     'libraries': 
                     [
-                        '-lcsound64 -lecl -lgc -lpthread',
+                        '-lcsound64 -lpthread',
                     ],
                     'include_dirs': 
                     [
                         '/usr/local/include/csound/',
                         '/usr/include/csound/',
+                        'vendor/csound-ac/',
                     ],
                 }
             ],
@@ -75,10 +76,6 @@
                     'include_dirs': 
                     [
                         '/Library/Frameworks/CsoundLib64.framework/Versions/7.0/Headers/',
-                        '/opt/homebrew/Cellar/ecl/21.2.1_1/include/',
-                        '/opt/homebrew/Cellar/gmp/6.2.1_1/include/',
-                        '/opt/homebrew/Cellar/bdw-gc/8.0.6/include/',
-                        '/opt/homebrew/lib/node_modules/node-addon-api/',
                         'vendor/csound-ac/',
                     ],
                 }

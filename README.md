@@ -63,12 +63,13 @@ additional capabilities such as accessing the local filesystem, loading plugin
 opcodes, and running somewhat faster.
 
 **CsoundAC** (algorithmic composition: ChordSpace, scores, PITV, etc.) is 
-**not** linked into `csound.node`. NW.js applications load it from WebAssembly 
-(`CsoundAC.js` and `CsoundAC.wasm` from [csound-wasm](https://github.com/gogins/csound-wasm)), 
-as `csound_loader.js` does via `createCsoundAC()`. Ship those wasm files next to 
-your HTML (as cloud-5 does). `csound.node` uses only header-only helpers from 
-csound-ac (`csound_threaded.hpp`, `CsoundProducer.hpp`), vendored under 
-`vendor/csound-ac/` and refreshed from csound-ac `master` on every build.
+**not** linked into `csound.node` on **macOS, Linux, or Windows**. NW.js 
+applications load it from WebAssembly (`CsoundAC.js` and `CsoundAC.wasm` from 
+[csound-wasm](https://github.com/gogins/csound-wasm)), as `csound_loader.js` does 
+via `createCsoundAC()`. Ship those wasm files next to your HTML on every platform 
+(as cloud-5 does). `csound.node` uses only header-only helpers from csound-ac 
+(`csound_threaded.hpp`, `CsoundProducer.hpp`), vendored under `vendor/csound-ac/` 
+and refreshed from csound-ac `master` on every build.
 
 Please log any bug reports or requests for enhancements at 
 https://github.com/gogins/csound-nwjs/issues.

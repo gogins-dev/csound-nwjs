@@ -273,16 +273,15 @@ jobs:
         run: |
           Add-Content -Path $env:GITHUB_PATH -Value "$env:GITHUB_WORKSPACE\csound-nwjs\native\node_modules\.bin"
 
-      - name: Build csound.node (Linux / macOS)
-        if: matrix.os_name != 'windows'
+      - name: Build csound.node
         working-directory: csound-nwjs
-        run: ./rebuild.bash
-
-      - name: Build csound.node (Windows)
-        if: matrix.os_name == 'windows'
-        working-directory: csound-nwjs
-        shell: pwsh
-        run: .\rebuild.ps1
+        shell: bash
+        run: |
+          if [ "${{ matrix.os_name }}" = "windows" ]; then
+            pwsh -File ./rebuild.ps1
+          else
+            ./rebuild.bash
+          fi
 
       - name: Upload csound.node
         uses: actions/upload-artifact@v4
