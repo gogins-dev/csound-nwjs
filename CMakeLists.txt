@@ -19,16 +19,19 @@ set(CSOUND_NWJS_SOURCE_DIR
 message(STATUS "CMAKE_HOST_SYSTEM_NAME: ${CMAKE_HOST_SYSTEM_NAME}")
 
 # -----------------------------------------------------------------------------
-# Refresh FindCsoundHomeFirst.cmake from csound-ac GitHub head (canonical source
-# is the csound-ac repo; do not edit the copy under csound-nwjs/cmake/).
-# csound_threaded.hpp is also downloaded from GitHub head at build time.
+# FindCsoundHomeFirst.cmake: canonical source is csound-ac (master). A vendored
+# copy under cmake/ is kept in this repo as an offline fallback. On configure,
+# we try to download csound-ac head and replace that copy when the download
+# succeeds. csound_threaded.hpp is also downloaded from GitHub head at build time.
 # -----------------------------------------------------------------------------
-message(STATUS "Refreshing FindCsoundHomeFirst.cmake from csound-ac GitHub head...")
+set(_find_csound_home_first_cmake "${CSOUND_NWJS_SOURCE_DIR}/cmake/FindCsoundHomeFirst.cmake")
 
 file(MAKE_DIRECTORY "${CSOUND_NWJS_SOURCE_DIR}/cmake")
 
 set(csound_ac_refresh_dir "${CMAKE_BINARY_DIR}/csound-ac-refresh")
 file(MAKE_DIRECTORY "${csound_ac_refresh_dir}")
+
+message(STATUS "Refreshing FindCsoundHomeFirst.cmake from csound-ac GitHub head...")
 
 file(DOWNLOAD
     "https://raw.githubusercontent.com/gogins-dev/csound-ac/refs/heads/master/cmake/FindCsoundHomeFirst.cmake"
@@ -41,16 +44,25 @@ list(GET find_csound_download_status 0 find_csound_download_code)
 
 if(find_csound_download_code EQUAL 0)
   execute_process(
-    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+    COMMAND "${CMAKE_COMMAND}" -E copy
       "${csound_ac_refresh_dir}/FindCsoundHomeFirst.cmake"
-      "${CSOUND_NWJS_SOURCE_DIR}/cmake/FindCsoundHomeFirst.cmake"
+      "${_find_csound_home_first_cmake}"
   )
+  message(STATUS "Replaced ${_find_csound_home_first_cmake} with csound-ac head.")
 else()
   list(GET find_csound_download_status 1 find_csound_download_message)
-  message(WARNING
-    "Failed to refresh FindCsoundHomeFirst.cmake from csound-ac head: "
-    "${find_csound_download_message}. Using local copy if present."
-  )
+  if(EXISTS "${_find_csound_home_first_cmake}")
+    message(WARNING
+      "Failed to refresh FindCsoundHomeFirst.cmake from csound-ac head: "
+      "${find_csound_download_message}. Using vendored copy in cmake/."
+    )
+  else()
+    message(FATAL_ERROR
+      "Failed to download FindCsoundHomeFirst.cmake from csound-ac head: "
+      "${find_csound_download_message}. No vendored fallback at "
+      "${_find_csound_home_first_cmake}."
+    )
+  endif()
 endif()
 
 # -----------------------------------------------------------------------------
@@ -64,7 +76,7 @@ set(CSOUND_ROOT_HINT "" CACHE PATH "Prefix where Csound 7 is installed (override
 
 list(APPEND CMAKE_MODULE_PATH "${CSOUND_NWJS_SOURCE_DIR}/cmake")
 set(FIND_CSOUND_HOME_FIRST_REQUIRED ON)
-include("${CSOUND_NWJS_SOURCE_DIR}/cmake/FindCsoundHomeFirst.cmake")
+include("${_find_csound_home_first_cmake}")
 
 if(NOT CSOUND_FOUND)
   message(FATAL_ERROR "Csound 7 was not found. Set CSOUND_ROOT or -DCSOUND_ROOT_HINT=... to your install prefix.")
