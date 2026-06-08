@@ -19,9 +19,11 @@ set(CSOUND_NWJS_SOURCE_DIR
 message(STATUS "CMAKE_HOST_SYSTEM_NAME: ${CMAKE_HOST_SYSTEM_NAME}")
 
 # -----------------------------------------------------------------------------
-# Refresh FindCsoundHomeFirst.cmake from csound-ac
+# Refresh FindCsoundHomeFirst.cmake from csound-ac GitHub head (canonical source
+# is the csound-ac repo; do not edit the copy under csound-nwjs/cmake/).
+# csound_threaded.hpp is also downloaded from GitHub head at build time.
 # -----------------------------------------------------------------------------
-message(STATUS "Refreshing FindCsoundHomeFirst.cmake from csound-ac (csound_threaded.hpp is downloaded from GitHub head at build time)...")
+message(STATUS "Refreshing FindCsoundHomeFirst.cmake from csound-ac GitHub head...")
 
 file(MAKE_DIRECTORY "${CSOUND_NWJS_SOURCE_DIR}/cmake")
 

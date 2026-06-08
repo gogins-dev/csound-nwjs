@@ -10,11 +10,18 @@
 #   5. /usr/local
 #   6. /opt/homebrew
 #
-# Search order elsewhere:
-#   1. $HOME
-#   2. /usr/local
-#   3. /opt/homebrew
-#   4. /usr
+# Search order on Windows:
+#   1. CSOUND_ROOT_HINT (if set)
+#   2. %USERPROFILE% or %HOME%
+#   3. C:/Program Files/Csound
+#   4. C:/Program Files (x86)/Csound
+#
+# Search order on Linux and other Unix:
+#   1. CSOUND_ROOT_HINT (if set)
+#   2. $HOME
+#   3. /usr/local
+#   4. /opt/homebrew
+#   5. /usr
 #
 # Sets:
 #   CSOUND_FOUND
@@ -39,6 +46,11 @@ if(NOT DEFINED FIND_CSOUND_HOME_FIRST_REQUIRED)
 endif()
 
 set(_csound_home "$ENV{HOME}")
+if(WIN32 AND (NOT _csound_home OR _csound_home STREQUAL ""))
+    if(DEFINED ENV{USERPROFILE} AND NOT "$ENV{USERPROFILE}" STREQUAL "")
+        set(_csound_home "$ENV{USERPROFILE}")
+    endif()
+endif()
 
 set(_csound_search_roots)
 if(DEFINED CSOUND_ROOT_HINT AND NOT CSOUND_ROOT_HINT STREQUAL "")
@@ -80,11 +92,15 @@ if(APPLE)
     )
 endif()
 
-list(PREPEND CMAKE_PREFIX_PATH
-    "${_csound_home}"
-    "/usr/local"
-    "/opt/homebrew"
-)
+if(WIN32)
+    list(PREPEND CMAKE_PREFIX_PATH "${_csound_home}")
+else()
+    list(PREPEND CMAKE_PREFIX_PATH
+        "${_csound_home}"
+        "/usr/local"
+        "/opt/homebrew"
+    )
+endif()
 
 # ------------------------------------------------------------------------------
 # Executable
@@ -142,8 +158,12 @@ if(APPLE)
 endif()
 
 if(NOT CSOUND_LIBRARY)
+    set(_csound_library_names CsoundLib64 csound64 csound64-6.0)
+    if(WIN32)
+        list(APPEND _csound_library_names csound csound64.lib)
+    endif()
     find_library(CSOUND_LIBRARY
-        NAMES CsoundLib64 csound64 csound64-6.0
+        NAMES ${_csound_library_names}
         PATHS ${_csound_search_roots}
         PATH_SUFFIXES lib lib64
         NO_DEFAULT_PATH
@@ -160,7 +180,11 @@ if(NOT CSOUND_INCLUDE_DIR)
 endif()
 
 if(NOT CSOUND_LIBRARY)
-    find_library(CSOUND_LIBRARY NAMES CsoundLib64 csound64 csound64-6.0)
+    set(_csound_library_names_fallback CsoundLib64 csound64 csound64-6.0)
+    if(WIN32)
+        list(APPEND _csound_library_names_fallback csound)
+    endif()
+    find_library(CSOUND_LIBRARY NAMES ${_csound_library_names_fallback})
 endif()
 
 if(NOT CSOUND_INCLUDE_DIR)
@@ -171,14 +195,24 @@ set(CSOUND_LIBRARIES "${CSOUND_LIBRARY}")
 set(CSOUND_INCLUDE_DIRS "${CSOUND_INCLUDE_DIR}")
 
 # ------------------------------------------------------------------------------
-# Version
+# Version (for -DCSOUND_VERSION_MAJOR=... compile definitions)
 # ------------------------------------------------------------------------------
 
-set(CSOUND_VERSION "")
-set(CSOUND_VERSION_MAJOR "")
-set(CSOUND_VERSION_MINOR "")
+if(NOT CSOUND_VERSION_MAJOR)
+    get_property(_csound_cached_major_set CACHE CSOUND_VERSION_MAJOR PROPERTY VALUE SET)
+    if(_csound_cached_major_set)
+        get_property(CSOUND_VERSION_MAJOR CACHE CSOUND_VERSION_MAJOR PROPERTY VALUE)
+        get_property(_csound_cached_minor_set CACHE CSOUND_VERSION_MINOR PROPERTY VALUE SET)
+        if(_csound_cached_minor_set)
+            get_property(CSOUND_VERSION_MINOR CACHE CSOUND_VERSION_MINOR PROPERTY VALUE)
+        endif()
+        if(CSOUND_VERSION_MAJOR)
+            set(CSOUND_VERSION "${CSOUND_VERSION_MAJOR}.${CSOUND_VERSION_MINOR}")
+        endif()
+    endif()
+endif()
 
-if(CSOUND_EXECUTABLE)
+if(CSOUND_EXECUTABLE AND NOT CSOUND_VERSION_MAJOR)
     execute_process(
         COMMAND "${CSOUND_EXECUTABLE}" --version
         OUTPUT_VARIABLE _csound_version_stdout
@@ -198,11 +232,54 @@ if(CSOUND_EXECUTABLE)
     endif()
 endif()
 
+if(CSOUND_LIBRARY AND NOT CSOUND_VERSION_MAJOR)
+    if(CSOUND_LIBRARY MATCHES "/Versions/([0-9]+)\\.([0-9]+)/")
+        set(CSOUND_VERSION_MAJOR "${CMAKE_MATCH_1}")
+        set(CSOUND_VERSION_MINOR "${CMAKE_MATCH_2}")
+        set(CSOUND_VERSION "${CMAKE_MATCH_1}.${CMAKE_MATCH_2}")
+    endif()
+endif()
+
+if(CSOUND_INCLUDE_DIR AND NOT CSOUND_VERSION_MAJOR)
+    set(_csound_version_h "")
+    foreach(_csound_version_candidate IN ITEMS
+        "${CSOUND_INCLUDE_DIR}/version.h"
+        "${CSOUND_INCLUDE_DIR}/csound/version.h"
+    )
+        if(EXISTS "${_csound_version_candidate}")
+            set(_csound_version_h "${_csound_version_candidate}")
+            break()
+        endif()
+    endforeach()
+
+    if(_csound_version_h)
+        file(READ "${_csound_version_h}" _csound_version_h_text)
+        string(REGEX MATCH "#define[ \t]+CS_VERSION[ \t]+\\(([0-9]+)\\)" _cs_ver_match "${_csound_version_h_text}")
+        if(_cs_ver_match)
+            set(CSOUND_VERSION_MAJOR "${CMAKE_MATCH_1}")
+        endif()
+        string(REGEX MATCH "#define[ \t]+CS_SUBVER[ \t]+\\(([0-9]+)\\)" _cs_sub_match "${_csound_version_h_text}")
+        if(_cs_sub_match)
+            set(CSOUND_VERSION_MINOR "${CMAKE_MATCH_1}")
+        endif()
+        if(CSOUND_VERSION_MAJOR)
+            set(CSOUND_VERSION "${CSOUND_VERSION_MAJOR}.${CSOUND_VERSION_MINOR}")
+        endif()
+    endif()
+endif()
+
+if(CSOUND_VERSION_MAJOR AND NOT CSOUND_VERSION)
+    if(NOT DEFINED CSOUND_VERSION_MINOR OR CSOUND_VERSION_MINOR STREQUAL "")
+        set(CSOUND_VERSION_MINOR "0")
+    endif()
+    set(CSOUND_VERSION "${CSOUND_VERSION_MAJOR}.${CSOUND_VERSION_MINOR}")
+endif()
+
 # ------------------------------------------------------------------------------
 # Result
 # ------------------------------------------------------------------------------
 
-if(CSOUND_LIBRARY AND CSOUND_INCLUDE_DIR AND CSOUND_EXECUTABLE)
+if(CSOUND_LIBRARY AND CSOUND_INCLUDE_DIR)
     set(CSOUND_FOUND TRUE)
 else()
     set(CSOUND_FOUND FALSE)
@@ -216,9 +293,15 @@ set(CSOUND_LIBRARIES "${CSOUND_LIBRARIES}" CACHE STRING "Csound libraries" FORCE
 set(CSOUND_INCLUDE_DIR "${CSOUND_INCLUDE_DIR}" CACHE PATH "Csound include directory" FORCE)
 set(CSOUND_INCLUDE_DIRS "${CSOUND_INCLUDE_DIRS}" CACHE STRING "Csound include directories" FORCE)
 set(CSOUND_FRAMEWORK_DIR "${CSOUND_FRAMEWORK_DIR}" CACHE PATH "Csound framework directory" FORCE)
-set(CSOUND_VERSION "${CSOUND_VERSION}" CACHE STRING "Csound version" FORCE)
-set(CSOUND_VERSION_MAJOR "${CSOUND_VERSION_MAJOR}" CACHE STRING "Csound major version" FORCE)
-set(CSOUND_VERSION_MINOR "${CSOUND_VERSION_MINOR}" CACHE STRING "Csound minor version" FORCE)
+if(CSOUND_VERSION)
+    set(CSOUND_VERSION "${CSOUND_VERSION}" CACHE STRING "Csound version" FORCE)
+endif()
+if(CSOUND_VERSION_MAJOR)
+    set(CSOUND_VERSION_MAJOR "${CSOUND_VERSION_MAJOR}" CACHE STRING "Csound major version" FORCE)
+endif()
+if(CSOUND_VERSION_MINOR)
+    set(CSOUND_VERSION_MINOR "${CSOUND_VERSION_MINOR}" CACHE STRING "Csound minor version" FORCE)
+endif()
 
 message(STATUS "==== Csound home-first detection ====")
 message(STATUS "CSOUND_FOUND:         ${CSOUND_FOUND}")
