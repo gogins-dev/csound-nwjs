@@ -76,7 +76,9 @@ jobs:
         if: matrix.os_name == 'windows'
         shell: pwsh
         run: |
-          choco install -y winflexbison3 doxygen swig
+          # winflexbison3 only when building Csound from source (cache miss).
+          # swig/doxygen were for csound-ac; not needed for csound.node.
+          choco install -y winflexbison3
 
       - name: Cache ccache
         if: matrix.os_name != 'windows'
