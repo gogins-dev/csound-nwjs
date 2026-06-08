@@ -350,7 +350,8 @@ jobs:
       - name: Build libCsoundAC (Windows)
         if: matrix.os_name == 'windows'
         shell: pwsh
-        run: cmake --build "csound-ac/${{ matrix.csound_ac_build_dir }}" --config RelWithDebInfo --target libCsoundAC --parallel
+        # Visual Studio multi-config: libmusicxml only exposes Debug|Release, not RelWithDebInfo.
+        run: cmake --build "csound-ac/${{ matrix.csound_ac_build_dir }}" --config Release --target libCsoundAC --parallel
 
       - name: npm ci (cmake-js, node-addon-api)
         working-directory: csound-nwjs/native
