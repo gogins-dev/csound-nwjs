@@ -1,5 +1,6 @@
 # Build csound.node on GitHub-hosted runners (same ingredients as ./rebuild.bash locally:
-# Csound 7, csound-ac + libCsoundAC, native/ npm deps for cmake-js + node-addon-api).
+# Csound 7, vendored csound-ac headers refreshed from GitHub, cmake-js + node-addon-api).
+# CsoundAC composition is wasm (CsoundAC.js/.wasm from csound-wasm), not native libCsoundAC.
 
 name: CI
 
@@ -31,33 +32,18 @@ jobs:
           - name: Linux
             os_name: linux
             runner: ubuntu-latest
-            csound_ac_build_dir: build-linux
           - name: macOS
             os_name: macos
             runner: macos-latest
-            csound_ac_build_dir: build-macos
           - name: Windows
             os_name: windows
             runner: windows-latest
-            csound_ac_build_dir: build-windows
 
     steps:
       - name: Checkout csound-nwjs
         uses: actions/checkout@v4
         with:
           path: csound-nwjs
-
-      - name: Checkout csound-ac
-        uses: actions/checkout@v4
-        with:
-          repository: gogins-dev/csound-ac
-          path: csound-ac
-          submodules: recursive
-
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -91,8 +77,6 @@ jobs:
         shell: pwsh
         run: |
           choco install -y winflexbison3 doxygen swig
-          # Boost headers/libs for csound-ac (MSVC 2022 / toolset 14.3).
-          choco install -y boost-msvc-14.3
 
       - name: Cache ccache
         if: matrix.os_name != 'windows'
@@ -101,7 +85,7 @@ jobs:
           path: |
             ~/.ccache
             ~/Library/Caches/ccache
-          key: ${{ runner.os }}-ccache-csound-nwjs-${{ hashFiles('csound-nwjs/**/*.cpp', 'csound-nwjs/CMakeLists.txt', 'csound-ac/**/*.cpp', 'csound-ac/**/CMakeLists.txt') }}
+          key: ${{ runner.os }}-ccache-csound-nwjs-${{ hashFiles('csound-nwjs/**/*.cpp', 'csound-nwjs/CMakeLists.txt', 'csound-nwjs/vendor/**') }}
           restore-keys: |
             ${{ runner.os }}-ccache-csound-nwjs-
 
@@ -275,84 +259,6 @@ jobs:
           path: .cache/csound-install
           key: ${{ runner.os }}-${{ env.CSOUND_CACHE_VERSION }}-${{ github.run_id }}
 
-      - name: Configure csound-ac (Linux)
-        if: matrix.os_name == 'linux'
-        run: |
-          PY="$(python -c 'import sys; print(sys.executable)')"
-          cmake -S csound-ac -B "csound-ac/${{ matrix.csound_ac_build_dir }}" -G Ninja \
-            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-            -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
-            -DGENERATE_DOCUMENTATION=OFF \
-            -DCMAKE_PREFIX_PATH="${CSOUND_INSTALL_PREFIX};/usr/local;/usr" \
-            -DCSOUND_ROOT_HINT="${CSOUND_INSTALL_PREFIX}" \
-            -DCSOUND_EXECUTABLE="${CSOUND_INSTALL_PREFIX}/bin/csound" \
-            -DPython3_EXECUTABLE="${PY}" \
-            -DCSOUND_AC_INSTALL_PYTHON_TO_SITEARCH=OFF \
-            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
-            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
-
-      - name: Configure csound-ac (macOS)
-        if: matrix.os_name == 'macos'
-        run: |
-          PY="$(python -c 'import sys; print(sys.executable)')"
-          cmake -S csound-ac -B "csound-ac/${{ matrix.csound_ac_build_dir }}" -G Ninja \
-            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-            -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
-            -DGENERATE_DOCUMENTATION=OFF \
-            -DCMAKE_PREFIX_PATH="${CSOUND_INSTALL_PREFIX};${HOME}/Library/Frameworks;/Library/Frameworks;/opt/homebrew;/usr/local;/usr" \
-            -DCSOUND_ROOT_HINT="${CSOUND_INSTALL_PREFIX}" \
-            -DCSOUND_EXECUTABLE="${CSOUND_INSTALL_PREFIX}/bin/csound" \
-            -DPython3_EXECUTABLE="${PY}" \
-            -DCSOUND_AC_INSTALL_PYTHON_TO_SITEARCH=OFF \
-            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
-            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
-
-      - name: Configure csound-ac (Windows)
-        if: matrix.os_name == 'windows'
-        shell: pwsh
-        run: |
-          $PY = python -c "import sys; print(sys.executable)"
-          $csoundExe = @(
-            (Join-Path $env:CSOUND_INSTALL_PREFIX "bin\csound64.exe"),
-            (Join-Path $env:CSOUND_INSTALL_PREFIX "bin\csound.exe")
-          ) | Where-Object { Test-Path $_ } | Select-Object -First 1
-          $vcpkg = Join-Path $env:GITHUB_WORKSPACE "csound\vcpkg_installed\x64-windows"
-          $prefixPath = @($env:CSOUND_INSTALL_PREFIX)
-          $libPath = @((Join-Path $env:CSOUND_INSTALL_PREFIX "lib"))
-          $includePath = @((Join-Path $env:CSOUND_INSTALL_PREFIX "include"))
-          if (Test-Path $vcpkg) {
-            $prefixPath += $vcpkg
-            $libPath += (Join-Path $vcpkg "lib")
-            $includePath += (Join-Path $vcpkg "include")
-          }
-          $boostRoot = Get-ChildItem -Path "C:\local" -Filter "boost_*" -Directory -ErrorAction SilentlyContinue |
-            Select-Object -First 1
-          if ($boostRoot) {
-            $prefixPath += $boostRoot.FullName
-            Add-Content -Path $env:GITHUB_ENV -Value "BOOST_ROOT=$($boostRoot.FullName)"
-          }
-          cmake -S csound-ac -B "csound-ac/${{ matrix.csound_ac_build_dir }}" `
-            -G "Visual Studio 17 2022" -A x64 `
-            -DCMAKE_POLICY_VERSION_MINIMUM=3.5 `
-            -DGENERATE_DOCUMENTATION=OFF `
-            -DCMAKE_PREFIX_PATH="$(($prefixPath -join ';'))" `
-            -DCMAKE_LIBRARY_PATH="$(($libPath -join ';'))" `
-            -DCMAKE_INCLUDE_PATH="$(($includePath -join ';'))" `
-            -DCSOUND_ROOT_HINT="$env:CSOUND_INSTALL_PREFIX" `
-            -DCSOUND_EXECUTABLE="$csoundExe" `
-            -DPython3_EXECUTABLE="$PY" `
-            -DCSOUND_AC_INSTALL_PYTHON_TO_SITEARCH=OFF
-
-      - name: Build libCsoundAC (Linux / macOS)
-        if: matrix.os_name != 'windows'
-        run: cmake --build "csound-ac/${{ matrix.csound_ac_build_dir }}" --target libCsoundAC --parallel
-
-      - name: Build libCsoundAC (Windows)
-        if: matrix.os_name == 'windows'
-        shell: pwsh
-        # Visual Studio multi-config: libmusicxml only exposes Debug|Release, not RelWithDebInfo.
-        run: cmake --build "csound-ac/${{ matrix.csound_ac_build_dir }}" --config Release --target libCsoundAC --parallel
-
       - name: npm ci (cmake-js, node-addon-api)
         working-directory: csound-nwjs/native
         run: npm ci
@@ -370,16 +276,12 @@ jobs:
       - name: Build csound.node (Linux / macOS)
         if: matrix.os_name != 'windows'
         working-directory: csound-nwjs
-        env:
-          CSOUND_AC_ROOT: ${{ github.workspace }}/csound-ac
         run: ./rebuild.bash
 
       - name: Build csound.node (Windows)
         if: matrix.os_name == 'windows'
         working-directory: csound-nwjs
         shell: pwsh
-        env:
-          CSOUND_AC_ROOT: ${{ github.workspace }}/csound-ac
         run: .\rebuild.ps1
 
       - name: Upload csound.node

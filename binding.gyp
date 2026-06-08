@@ -79,7 +79,7 @@
                         '/opt/homebrew/Cellar/gmp/6.2.1_1/include/',
                         '/opt/homebrew/Cellar/bdw-gc/8.0.6/include/',
                         '/opt/homebrew/lib/node_modules/node-addon-api/',
-                        '/Users/michaelgogins/csound-ac/CsoundAC/',
+                        'vendor/csound-ac/',
                     ],
                 }
             ],

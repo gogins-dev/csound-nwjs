@@ -62,6 +62,14 @@ can be rendered in either environment, although csound.node does afford
 additional capabilities such as accessing the local filesystem, loading plugin 
 opcodes, and running somewhat faster.
 
+**CsoundAC** (algorithmic composition: ChordSpace, scores, PITV, etc.) is 
+**not** linked into `csound.node`. NW.js applications load it from WebAssembly 
+(`CsoundAC.js` and `CsoundAC.wasm` from [csound-wasm](https://github.com/gogins/csound-wasm)), 
+as `csound_loader.js` does via `createCsoundAC()`. Ship those wasm files next to 
+your HTML (as cloud-5 does). `csound.node` uses only header-only helpers from 
+csound-ac (`csound_threaded.hpp`, `CsoundProducer.hpp`), vendored under 
+`vendor/csound-ac/` and refreshed from csound-ac `master` on every build.
+
 Please log any bug reports or requests for enhancements at 
 https://github.com/gogins/csound-nwjs/issues.
 
@@ -111,13 +119,15 @@ pieces, see Poustinia-v5c.
 
 ## Building `csound.node`
 
-csound-nwjs is built in the "npm way," but uses cmake.js rather than node-gyp 
-to compile the addon.
+csound-nwjs is built in the "npm way," but uses cmake-js rather than node-gyp 
+to compile the addon. You need **Csound 7** only; you do **not** need to build 
+csound-ac or `libCsoundAC`.
 
 1. Make a local clone of this repository.
 
 2. Install Csound from `https://csound.com/download.html`. On Linux and macOS, 
-   it is easy to build Csound from source code.
+   it is easy to build Csound from source code. Optionally set `CSOUND_ROOT` 
+   to your install prefix.
 
 3. Install npm.
 
@@ -134,7 +144,11 @@ change this to suit your environment.
 NODE_PATH=/usr/local/lib
 ```
 
-7. Execute the `rebuild.bash` script.
+7. Execute `./rebuild.bash` (or `.\rebuild.ps1` on Windows).
+
+For **CsoundAC** in your NW.js app, copy `CsoundAC.js`, `CsoundAC.wasm`, and 
+related loader scripts from a [csound-wasm](https://github.com/gogins/csound-wasm) 
+build into your application directory (see cloud-5).
 
 ## Testing
 

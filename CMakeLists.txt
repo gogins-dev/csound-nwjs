@@ -22,7 +22,12 @@ message(STATUS "CMAKE_HOST_SYSTEM_NAME: ${CMAKE_HOST_SYSTEM_NAME}")
 # FindCsoundHomeFirst.cmake: canonical source is csound-ac (master). A vendored
 # copy under cmake/ is kept in this repo as an offline fallback. On configure,
 # we try to download csound-ac head and replace that copy when the download
-# succeeds. csound_threaded.hpp is also downloaded from GitHub head at build time.
+# succeeds.
+#
+# CsoundAC composition (ChordSpace, scores, etc.) is wasm-only (csound-wasm).
+# csound.node uses only header-only csound-ac helpers under vendor/csound-ac/;
+# those headers are vendored in git and refreshed from csound-ac master on every
+# configure and before each build.
 # -----------------------------------------------------------------------------
 set(_find_csound_home_first_cmake "${CSOUND_NWJS_SOURCE_DIR}/cmake/FindCsoundHomeFirst.cmake")
 
@@ -87,102 +92,29 @@ if(CSOUND_INCLUDE_DIR AND EXISTS "${CSOUND_INCLUDE_DIR}/csound/csound.hpp")
 endif()
 
 # -----------------------------------------------------------------------------
-# CsoundAC (libCsoundAC + headers): built in-tree next to this repo or explicit paths
+# csound-ac header-only helpers for csound.node (no libCsoundAC)
 # -----------------------------------------------------------------------------
-set(CSOUND_AC_ROOT "" CACHE PATH "Path to csound-ac repository root (contains CsoundAC/).")
-set(CSOUNDAC_LIBRARY "" CACHE FILEPATH "Path to libCsoundAC (.dylib / .so / .dll / .lib).")
-set(CSOUND_AC_INCLUDE_DIR "" CACHE PATH "Directory containing CsoundProducer.hpp (usually .../CsoundAC).")
+set(CSOUND_AC_HEADERS_DIR "${CSOUND_NWJS_SOURCE_DIR}/vendor/csound-ac")
+set(CSOUND_AC_GITHUB_RAW "https://raw.githubusercontent.com/gogins-dev/csound-ac/refs/heads/master/CsoundAC")
+file(MAKE_DIRECTORY "${CSOUND_AC_HEADERS_DIR}")
 
-# Prefer cache (-D / cmake-js --CD); else environment; else sibling clone ../csound-ac.
-if(NOT CSOUND_AC_ROOT)
-  if(DEFINED ENV{CSOUND_AC_ROOT} AND NOT "$ENV{CSOUND_AC_ROOT}" STREQUAL "")
-    set(CSOUND_AC_ROOT "$ENV{CSOUND_AC_ROOT}" CACHE PATH "Path to csound-ac repository root (from env CSOUND_AC_ROOT)." FORCE)
-  endif()
-endif()
-
-if(NOT CSOUND_AC_ROOT)
-  get_filename_component(_nwjs_csound_ac_sibling "${CMAKE_CURRENT_SOURCE_DIR}/../csound-ac" ABSOLUTE)
-  if(EXISTS "${_nwjs_csound_ac_sibling}/CsoundAC/CsoundProducer.hpp")
-    set(CSOUND_AC_ROOT "${_nwjs_csound_ac_sibling}" CACHE PATH "Path to csound-ac repository root (auto: sibling ../csound-ac)." FORCE)
-    message(STATUS "CSOUND_AC_ROOT (default): ${CSOUND_AC_ROOT}")
-  endif()
-endif()
-
-if(NOT CSOUND_AC_INCLUDE_DIR)
-  if(DEFINED ENV{CSOUND_AC_INCLUDE_DIR} AND NOT "$ENV{CSOUND_AC_INCLUDE_DIR}" STREQUAL "")
-    set(CSOUND_AC_INCLUDE_DIR "$ENV{CSOUND_AC_INCLUDE_DIR}" CACHE PATH "CsoundAC headers directory (from env)." FORCE)
-  endif()
-endif()
-
-if(CSOUND_AC_ROOT AND NOT CSOUND_AC_INCLUDE_DIR)
-  set(CSOUND_AC_INCLUDE_DIR "${CSOUND_AC_ROOT}/CsoundAC" CACHE PATH "CsoundAC headers directory." FORCE)
-endif()
-
-if(NOT CSOUND_AC_INCLUDE_DIR)
-  message(
-    FATAL_ERROR
-    "CsoundAC headers not found. Set one of:\n"
-    "  - CMake: -DCSOUND_AC_ROOT=/path/to/csound-ac  or  -DCSOUND_AC_INCLUDE_DIR=/path/to/CsoundAC\n"
-    "  - Environment: CSOUND_AC_ROOT or CSOUND_AC_INCLUDE_DIR\n"
-    "  - Or clone csound-ac next to this repo as ../csound-ac\n"
-    "  - Or run ./rebuild.bash which sets cmake-js --CDCSOUND_AC_ROOT=..."
+function(csound_nwjs_fetch_csound_ac_header header_name)
+  set(_dst "${CSOUND_AC_HEADERS_DIR}/${header_name}")
+  set(_url "${CSOUND_AC_GITHUB_RAW}/${header_name}")
+  string(CONCAT _url_arg "-DURL=" "${_url}")
+  string(CONCAT _dst_arg "-DDST=" "${_dst}")
+  execute_process(
+    COMMAND "${CMAKE_COMMAND}" "${_url_arg}" "${_dst_arg}"
+            -P "${CSOUND_NWJS_SOURCE_DIR}/cmake/FetchCsoundACHeader.cmake"
   )
-endif()
-
-if(NOT CSOUNDAC_LIBRARY)
-  find_library(
-    CSOUNDAC_LIBRARY
-    NAMES CsoundAC libCsoundAC libCsoundAC.8.0 libCsoundAC.7.1 libCsoundAC.7.0
-    PATHS
-      "${CSOUND_AC_ROOT}/build-macos"
-      "${CSOUND_AC_ROOT}/build-linux"
-      "${CSOUND_AC_ROOT}/build-windows"
-      "${CSOUND_AC_ROOT}/build"
-      "${CSOUND_AC_ROOT}/build/CsoundAC"
-      "${CSOUND_AC_ROOT}/build-macos/CsoundAC"
-      "${CSOUND_AC_ROOT}/build-linux/CsoundAC"
-      "${CSOUND_AC_ROOT}/build-windows/CsoundAC"
-      "${CSOUND_AC_ROOT}/dist/csound-ac/lib"
-      "${CMAKE_PREFIX_PATH}"
-    NO_DEFAULT_PATH
-  )
-endif()
-
-# Versioned dylibs often live directly under build-macos/ (not .../CsoundAC/).
-if(NOT CSOUNDAC_LIBRARY AND CSOUND_AC_ROOT)
-  file(
-    GLOB _nwjs_libcsoundac
-    LIST_DIRECTORIES false
-    "${CSOUND_AC_ROOT}/build-macos/libCsoundAC*.dylib"
-    "${CSOUND_AC_ROOT}/build-linux/libCsoundAC.so*"
-    "${CSOUND_AC_ROOT}/build/CsoundAC/libCsoundAC*.dylib"
-    "${CSOUND_AC_ROOT}/build/CsoundAC/libCsoundAC.so*"
-    "${CSOUND_AC_ROOT}/build-macos/CsoundAC/libCsoundAC*.dylib"
-    "${CSOUND_AC_ROOT}/build-linux/CsoundAC/libCsoundAC.so*"
-    "${CSOUND_AC_ROOT}/dist/csound-ac/lib/libCsoundAC*.dylib"
-    "${CSOUND_AC_ROOT}/dist/csound-ac/lib/libCsoundAC.so*"
-  )
-  list(LENGTH _nwjs_libcsoundac _nwjs_libcsoundac_len)
-  if(_nwjs_libcsoundac_len GREATER 0)
-    list(GET _nwjs_libcsoundac 0 CSOUNDAC_LIBRARY)
-    message(STATUS "Found libCsoundAC via GLOB under CSOUND_AC_ROOT: ${CSOUNDAC_LIBRARY}")
+  if(NOT EXISTS "${_dst}")
+    message(FATAL_ERROR "Missing csound-ac header (download failed and no vendored fallback): ${_dst}")
   endif()
-endif()
+endfunction()
 
-if(NOT CSOUNDAC_LIBRARY)
-  find_library(CSOUNDAC_LIBRARY NAMES CsoundAC libCsoundAC libCsoundAC.8.0 libCsoundAC.7.1 libCsoundAC.7.0)
-endif()
-
-if(NOT CSOUNDAC_LIBRARY)
-  message(
-    FATAL_ERROR
-    "libCsoundAC not found under CSOUND_AC_ROOT=${CSOUND_AC_ROOT}. "
-    "Build csound-ac (e.g. Ninja target libCsoundAC) or pass -DCSOUNDAC_LIBRARY=/path/to/libCsoundAC.*"
-  )
-endif()
-
-message(STATUS "Using CsoundAC library: ${CSOUNDAC_LIBRARY}")
-message(STATUS "Using CsoundAC includes: ${CSOUND_AC_INCLUDE_DIR}")
+csound_nwjs_fetch_csound_ac_header(csound_threaded.hpp)
+csound_nwjs_fetch_csound_ac_header(CsoundProducer.hpp)
+message(STATUS "Using csound-ac headers: ${CSOUND_AC_HEADERS_DIR}")
 
 # -----------------------------------------------------------------------------
 # Node / N-API: cmake-js sets CMAKE_JS_INC to Node's include/node only; napi.h is in node-addon-api.
@@ -230,35 +162,28 @@ file(GLOB SOURCE_FILES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
 add_library(${PROJECT_NAME} SHARED ${SOURCE_FILES} ${_cmake_js_src})
 set_target_properties(${PROJECT_NAME} PROPERTIES PREFIX "" SUFFIX ".node")
 
-# csound-ac CsoundAC/csound_threaded.hpp: always download from GitHub head
-# into the source-tree copy before compiling. This source directory is listed
-# before CSOUND_AC_INCLUDE_DIR / CSOUND includes so the refreshed file wins over
-# any installed csound_threaded.hpp.
-set(CSOUND_NWJS_CSOUND_THREADED_INCLUDE_DIR "${CSOUND_NWJS_SOURCE_DIR}")
-set(CSOUND_AC_CSOUND_THREADED_URL
-    "https://raw.githubusercontent.com/gogins-dev/csound-ac/refs/heads/master/CsoundAC/csound_threaded.hpp"
-)
-set(CSOUND_AC_CSOUND_THREADED_DST "${CSOUND_NWJS_SOURCE_DIR}/csound_threaded.hpp")
-# Single -D arguments avoid Ninja/VERBATIM edge cases with empty URL for cmake -P.
-string(CONCAT _csound_threaded_url_arg "-DURL=" "${CSOUND_AC_CSOUND_THREADED_URL}")
-string(CONCAT _csound_threaded_dst_arg "-DDST=" "${CSOUND_AC_CSOUND_THREADED_DST}")
+string(CONCAT _csound_threaded_url_arg "-DURL=" "${CSOUND_AC_GITHUB_RAW}/csound_threaded.hpp")
+string(CONCAT _csound_threaded_dst_arg "-DDST=" "${CSOUND_AC_HEADERS_DIR}/csound_threaded.hpp")
+string(CONCAT _csound_producer_url_arg "-DURL=" "${CSOUND_AC_GITHUB_RAW}/CsoundProducer.hpp")
+string(CONCAT _csound_producer_dst_arg "-DDST=" "${CSOUND_AC_HEADERS_DIR}/CsoundProducer.hpp")
 add_custom_target(
-  csound_ac_fetch_csound_threaded
+  csound_ac_fetch_headers
   COMMAND "${CMAKE_COMMAND}" "${_csound_threaded_url_arg}" "${_csound_threaded_dst_arg}"
-          -P "${CSOUND_NWJS_SOURCE_DIR}/cmake/FetchCsoundACCsoundThreaded.cmake"
-  COMMENT "Download csound-ac CsoundAC/csound_threaded.hpp from GitHub head"
+          -P "${CSOUND_NWJS_SOURCE_DIR}/cmake/FetchCsoundACHeader.cmake"
+  COMMAND "${CMAKE_COMMAND}" "${_csound_producer_url_arg}" "${_csound_producer_dst_arg}"
+          -P "${CSOUND_NWJS_SOURCE_DIR}/cmake/FetchCsoundACHeader.cmake"
+  COMMENT "Refresh csound-ac headers from GitHub head"
   VERBATIM
 )
-add_dependencies(${PROJECT_NAME} csound_ac_fetch_csound_threaded)
+add_dependencies(${PROJECT_NAME} csound_ac_fetch_headers)
 
 target_include_directories(
   ${PROJECT_NAME}
   PRIVATE
     "${CMAKE_JS_INC}"
     "${_napi_include}"
-    "${CSOUND_NWJS_CSOUND_THREADED_INCLUDE_DIR}"
+    "${CSOUND_AC_HEADERS_DIR}"
     ${CSOUND_INCLUDE_DIRS}
-    "${CSOUND_AC_INCLUDE_DIR}"
 )
 
 if(NOT CSOUND_VERSION_MAJOR)
@@ -278,7 +203,6 @@ if(APPLE)
     PRIVATE
       ${CMAKE_JS_LIB}
       ${CSOUND_LIBRARIES}
-      ${CSOUNDAC_LIBRARY}
       pthread
   )
   target_link_options(
@@ -292,23 +216,14 @@ if(APPLE)
     get_filename_component(_csound_fw_parent "${CSOUND_FRAMEWORK_DIR}" DIRECTORY)
     target_link_options(${PROJECT_NAME} PRIVATE "LINKER:-F${_csound_fw_parent}")
   endif()
-  get_filename_component(_csoundac_dir "${CSOUNDAC_LIBRARY}" DIRECTORY)
-  if(_csoundac_dir)
-    target_link_options(${PROJECT_NAME} PRIVATE "LINKER:-rpath,${_csoundac_dir}")
-  endif()
 elseif(UNIX AND NOT APPLE)
   target_link_libraries(
     ${PROJECT_NAME}
     PRIVATE
       ${CMAKE_JS_LIB}
       ${CSOUND_LIBRARIES}
-      ${CSOUNDAC_LIBRARY}
       pthread
   )
-  get_filename_component(_csoundac_dir "${CSOUNDAC_LIBRARY}" DIRECTORY)
-  if(_csoundac_dir)
-    target_link_options(${PROJECT_NAME} PRIVATE "LINKER:-rpath,${_csoundac_dir}")
-  endif()
 elseif(WIN32)
   if(MSVC AND DEFINED CMAKE_JS_NODELIB_DEF AND DEFINED CMAKE_JS_NODELIB_TARGET)
     execute_process(
@@ -320,6 +235,5 @@ elseif(WIN32)
     PRIVATE
       ${CMAKE_JS_LIB}
       ${CSOUND_LIBRARIES}
-      ${CSOUNDAC_LIBRARY}
   )
 endif()
