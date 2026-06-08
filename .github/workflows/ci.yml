@@ -242,9 +242,13 @@ jobs:
         if: matrix.os_name == 'windows' && steps.validate-csound-windows.outputs.valid != '1'
         shell: pwsh
         run: |
+          $ErrorActionPreference = "Stop"
           git clone --depth 1 --recurse-submodules https://github.com/csound/csound.git
-          .\csound\vcpkg\bootstrap-vcpkg.bat
-          cmake -S csound -B csound/build `
+          Push-Location csound
+          .\vcpkg\bootstrap-vcpkg.bat
+          # Configure from inside the csound tree so CUSTOM_CMAKE=./platform/... resolves
+          # correctly (same layout as upstream csound/csound_builds.yml).
+          cmake -B build -S . `
             -DUSE_VCPKG=1 `
             -DCUSTOM_CMAKE="./platform/windows/Custom-vs.cmake" `
             -DBUILD_TESTS=OFF `
@@ -254,8 +258,12 @@ jobs:
             -DBUILD_PYTHON_OPCODES=OFF `
             -DUSE_PYTHON=OFF `
             -DCMAKE_INSTALL_PREFIX="$env:CSOUND_INSTALL_PREFIX"
-          cmake --build csound/build --config Release --parallel
-          cmake --install csound/build --config Release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build build --config Release --parallel
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --install build --config Release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Pop-Location
 
       - name: Save Csound install cache
         if: |
