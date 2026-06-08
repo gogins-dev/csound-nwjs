@@ -27,6 +27,14 @@
 #include <uv.h>
 #include <vector>
 
+#if defined(_WIN32)
+// Csound/Windows headers define GetVersion as a WINAPI macro, which breaks our
+// Napi callback named GetVersion and Napi::Function::New(env, GetVersion).
+#ifdef GetVersion
+#undef GetVersion
+#endif
+#endif
+
 static csound::CsoundProducer csound_;
 static Napi::FunctionReference persistent_message_callback;
 static concurrent_queue<char *> csound_messages_queue;
