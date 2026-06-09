@@ -7,11 +7,13 @@ name: CI
 on:
   push:
     branches: [main, master]
+    tags:
+      - 'v*'
   pull_request:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -291,3 +293,15 @@ jobs:
           name: csound-node-${{ matrix.os_name }}
           path: csound-nwjs/build/Release/csound.node
           if-no-files-found: error
+
+      - name: Stage tagged release asset
+        if: github.ref_type == 'tag'
+        shell: bash
+        run: |
+          cp "csound-nwjs/build/Release/csound.node" "csound-${{ matrix.os_name }}.node"
+
+      - name: Upload csound.node to GitHub Release
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: csound-${{ matrix.os_name }}.node
