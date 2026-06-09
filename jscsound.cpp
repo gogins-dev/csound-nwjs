@@ -191,7 +191,7 @@ Napi::String GetStringChannel(const Napi::CallbackInfo &info) {
     return Napi::String::New(env, buffer);
 }
 
-Napi::Number GetVersion(const Napi::CallbackInfo &info) {
+Napi::Number BindingGetVersion(const Napi::CallbackInfo &info) {
     Napi::Env env = info.Env();
     int value = csound_.GetVersion();
     return Napi::Number::New(env, value);
@@ -423,9 +423,9 @@ Napi::Object Initialize(Napi::Env env, Napi::Object exports) {
     exports.Set(Napi::String::New(env, "getScoreTime"),
                 Napi::Function::New(env, GetScoreTime));
     exports.Set(Napi::String::New(env, "GetVersion"),
-                Napi::Function::New(env, GetVersion));
+                Napi::Function::New(env, BindingGetVersion));
     exports.Set(Napi::String::New(env, "getVersion"),
-                Napi::Function::New(env, GetVersion));
+                Napi::Function::New(env, BindingGetVersion));
     exports.Set(Napi::String::New(env, "GetSr"),
                 Napi::Function::New(env, GetSr));
     exports.Set(Napi::String::New(env, "getSr"),
