@@ -479,12 +479,13 @@ public:
      * absent from the Csound 7 C++ wrapper. Keep these in CsoundThreaded
      * so embind and other clients can call one stable C++ API.
      */
-    virtual void SetHostImplementedAudioIO(int state)
+    virtual void SetHostImplementedAudioIO(int state, int bufSize = 0)
     {
 #if defined(CSOUND_VERSION_MAJOR) && CSOUND_VERSION_MAJOR >= 7
-        // Csound 7 removed csoundSetHostImplementedAudioIO(CSOUND *, int, int)
-        // and replaced it with one-way host audio I/O selection. There is no
-        // C API call to disable host audio I/O again, so state == 0 is a no-op.
+        // Csound 7 no longer exports csoundSetHostImplementedAudioIO.
+        // Host I/O is selected with csoundSetHostAudioIO; the host reads
+        // spin/spout. bufSize is ignored.
+        (void)bufSize;
         if (state != 0)
         {
             csoundSetHostAudioIO(csound);
