@@ -1,14 +1,14 @@
 # FindCsoundHomeFirst.cmake
 #
-# Home-first Csound discovery.
+# Csound discovery. The macOS installer locations come first.
 #
 # Search order on macOS:
-#   1. $HOME/Library/Frameworks
-#   2. $HOME
-#   3. /Library/Frameworks
-#   4. /Applications/Csound
-#   5. /usr/local
-#   6. /opt/homebrew
+#   1. /Library/Frameworks
+#   2. /Applications/Csound
+#   3. /usr/local
+#   4. /opt/homebrew
+#   5. $HOME/Library/Frameworks
+#   6. $HOME
 #
 # Search order on Windows:
 #   1. CSOUND_ROOT_HINT (if set)
@@ -59,12 +59,12 @@ endif()
 
 if(APPLE)
     list(APPEND _csound_search_roots
-        "${_csound_home}/Library/Frameworks"
-        "${_csound_home}"
         "/Library/Frameworks"
         "/Applications/Csound"
         "/usr/local"
         "/opt/homebrew"
+        "${_csound_home}/Library/Frameworks"
+        "${_csound_home}"
     )
 elseif(WIN32)
     list(APPEND _csound_search_roots
@@ -83,10 +83,9 @@ endif()
 
 list(REMOVE_DUPLICATES _csound_search_roots)
 
-# Help ordinary CMake searches prefer home first.
+# Help ordinary CMake searches prefer the installer framework location.
 if(APPLE)
     list(PREPEND CMAKE_FRAMEWORK_PATH
-        "${_csound_home}/Library/Frameworks"
         "/Library/Frameworks"
         "/Applications/Csound"
     )
